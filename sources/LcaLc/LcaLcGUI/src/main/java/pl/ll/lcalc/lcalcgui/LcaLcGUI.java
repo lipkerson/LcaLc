@@ -6,17 +6,26 @@ package pl.ll.lcalc.lcalcgui;
 
 import org.jdesktop.application.Application;
 import org.jdesktop.application.SingleFrameApplication;
+import pl.ll.lcalc.exprparser.CalcWorker;
+import pl.ll.lcalcmath.ExprAble;
+import pl.ll.lcalcmath.ExprOperator;
 
 /**
  * The main class of the application.
  */
 public class LcaLcGUI extends SingleFrameApplication {
 
+    private  CalcWorker CalcWorker;
+    private ExprAble ExprAble;
+
+
     /**
      * At startup create and show the main frame of the application.
      */
     @Override protected void startup() {
-        show(new LcaLcGUIView(this));
+        ExprAble = new ExprOperator();
+        CalcWorker = new CalcWorker(ExprAble);
+        show(new LcaLcGUIView(this, CalcWorker));
     }
 
     /**

@@ -4,6 +4,8 @@
 
 package pl.ll.lcalc.lcalcgui;
 
+import java.awt.Color;
+import java.util.Enumeration;
 import org.jdesktop.application.Action;
 import org.jdesktop.application.ResourceMap;
 import org.jdesktop.application.SingleFrameApplication;
@@ -11,21 +13,40 @@ import org.jdesktop.application.FrameView;
 import org.jdesktop.application.TaskMonitor;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import javax.swing.text.AttributeSet;
 import javax.swing.Timer;
 import javax.swing.Icon;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
+import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.Style;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyleContext;
+import javax.swing.text.StyledDocument;
+import pl.ll.lcalc.exprparser.CalcWorker;
+import pl.ll.lcalc.exprparser.CharActionInfo;
 
 /**
  * The application's main frame.
  */
 public class LcaLcGUIView extends FrameView {
 
-    public LcaLcGUIView(SingleFrameApplication app) {
+    public static final CharActionInfo LASTCHARACTION = new CharActionInfo();
+    private CalcWorker calcWorker;    
+    private int numberOfBrackets = 0;
+    //
+    private static final Color ERROR_BACKGROUND_COLOR = new Color( 255, 215, 215 );
+    //
+    private StringBuffer sb = new StringBuffer();
+    private String lastExpr = "";
+    
+
+    
+
+    public LcaLcGUIView(SingleFrameApplication app, CalcWorker calcWorker) {
         super(app);
-
+        this.calcWorker = calcWorker;
         initComponents();
-
         // status bar initialization - message timeout, idle icon and busy animation, etc
         ResourceMap resourceMap = getResourceMap();
         int messageTimeout = resourceMap.getInteger("StatusBar.messageTimeout");
@@ -102,7 +123,8 @@ public class LcaLcGUIView extends FrameView {
 
         mainPanel = new javax.swing.JPanel();
         gradientPanel1 = new pl.ll.lcalc.lcalcgui.components.GradientPanel();
-        jTextArea1 = new javax.swing.JTextArea();
+        jScrollPane1 = new javax.swing.JScrollPane();
+        calcPane = new javax.swing.JTextPane();
         menuBar = new javax.swing.JMenuBar();
         javax.swing.JMenu fileMenu = new javax.swing.JMenu();
         javax.swing.JMenuItem exitMenuItem = new javax.swing.JMenuItem();
@@ -123,25 +145,37 @@ public class LcaLcGUIView extends FrameView {
             }
         });
 
-        jTextArea1.setColumns(20);
-        jTextArea1.setRows(5);
-        jTextArea1.setName("jTextArea1"); // NOI18N
+        jScrollPane1.setName("jScrollPane1"); // NOI18N
+
+        org.jdesktop.application.ResourceMap resourceMap = org.jdesktop.application.Application.getInstance().getContext().getResourceMap(LcaLcGUIView.class);
+        calcPane.setFont(resourceMap.getFont("calcPane.font")); // NOI18N
+        calcPane.setMargin(new java.awt.Insets(13, 13, 13, 13));
+        calcPane.setName("calcPane"); // NOI18N
+        calcPane.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyPressed(java.awt.event.KeyEvent evt) {
+                calcPaneKeyPressed(evt);
+            }
+            public void keyTyped(java.awt.event.KeyEvent evt) {
+                calcPaneKeyTyped(evt);
+            }
+        });
+        jScrollPane1.setViewportView(calcPane);
 
         org.jdesktop.layout.GroupLayout gradientPanel1Layout = new org.jdesktop.layout.GroupLayout(gradientPanel1);
         gradientPanel1.setLayout(gradientPanel1Layout);
         gradientPanel1Layout.setHorizontalGroup(
             gradientPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(org.jdesktop.layout.GroupLayout.TRAILING, gradientPanel1Layout.createSequentialGroup()
-                .addContainerGap(90, Short.MAX_VALUE)
-                .add(jTextArea1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 500, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                .add(85, 85, 85))
+            .add(gradientPanel1Layout.createSequentialGroup()
+                .add(103, 103, 103)
+                .add(jScrollPane1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 469, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(103, Short.MAX_VALUE))
         );
         gradientPanel1Layout.setVerticalGroup(
             gradientPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(gradientPanel1Layout.createSequentialGroup()
-                .add(21, 21, 21)
-                .add(jTextArea1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(146, Short.MAX_VALUE))
+                .add(35, 35, 35)
+                .add(jScrollPane1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 103, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(93, Short.MAX_VALUE))
         );
 
         org.jdesktop.layout.GroupLayout mainPanelLayout = new org.jdesktop.layout.GroupLayout(mainPanel);
@@ -162,7 +196,6 @@ public class LcaLcGUIView extends FrameView {
 
         menuBar.setName("menuBar"); // NOI18N
 
-        org.jdesktop.application.ResourceMap resourceMap = org.jdesktop.application.Application.getInstance().getContext().getResourceMap(LcaLcGUIView.class);
         fileMenu.setText(resourceMap.getString("fileMenu.text")); // NOI18N
         fileMenu.setName("fileMenu"); // NOI18N
 
@@ -228,9 +261,80 @@ public class LcaLcGUIView extends FrameView {
         System.out.println(evt.getKeyChar());
     }//GEN-LAST:event_gradientPanel1KeyTyped
 
+    private void calcPaneKeyTyped(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_calcPaneKeyTyped
+
+        synchronized (LASTCHARACTION) {            
+
+            char c = evt.getKeyChar();
+            String s = Character.toString(c);
+            calcWorker.calcProperChar(s, LASTCHARACTION);
+            if (LASTCHARACTION.isStart()) {                
+                Double d = calcWorker.calcString(lastExpr + sb.toString());
+                lastExpr = sb.toString();                
+                sb.setLength(0);
+                
+                if (d != null) {
+                    try {
+                        calcPane.setText("");
+                        Style style = calcPane.getLogicalStyle();
+                        StyleConstants.setAlignment(style, StyleConstants.ALIGN_LEFT);
+                        calcPane.setLogicalStyle(style);
+                        calcPane.getDocument().insertString(calcPane.getDocument().getLength(), "ABC\n", style);
+                        StyleConstants.setAlignment(style, StyleConstants.ALIGN_RIGHT);
+                        calcPane.setLogicalStyle(style);
+                        calcPane.getDocument().insertString(calcPane.getDocument().getLength(), "ABC", style);
+                    } catch (Exception e) {
+                        System.out.println("eeee" + e.getLocalizedMessage());
+                    }
+                    changeTextState(true);
+                } else {
+                    changeTextState(false);
+                }
+                evt.consume();
+                return;
+            }
+            if (LASTCHARACTION.isIncorrect()) {
+                evt.consume();
+                return;
+            } else {
+                sb.append(s);
+                if (LASTCHARACTION.isLeft()) {
+                    numberOfBrackets++;
+                }
+                if (LASTCHARACTION.isRight()) {
+                    numberOfBrackets--;
+                }
+                if (numberOfBrackets != 0) {
+                    changeTextState(false);
+                } else {
+                    changeTextState(true);
+                }
+            }
+        }
+    }//GEN-LAST:event_calcPaneKeyTyped
+
+    private void changeTextState(boolean accepted)
+    {
+        if(accepted)
+        {
+            calcPane.setBackground(new Color(255, 255, 255));
+        }else
+        {
+            calcPane.setBackground(ERROR_BACKGROUND_COLOR);
+        }
+    }
+
+    private void calcPaneKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_calcPaneKeyPressed
+        
+    }//GEN-LAST:event_calcPaneKeyPressed
+
+
+
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
+    private javax.swing.JTextPane calcPane;
     private pl.ll.lcalc.lcalcgui.components.GradientPanel gradientPanel1;
-    private javax.swing.JTextArea jTextArea1;
+    private javax.swing.JScrollPane jScrollPane1;
     private javax.swing.JPanel mainPanel;
     private javax.swing.JMenuBar menuBar;
     private javax.swing.JProgressBar progressBar;

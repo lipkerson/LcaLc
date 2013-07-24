@@ -17,31 +17,65 @@ import pl.ll.lcalcmath.ExprOperator;
 
 public class CalcWorker extends CalcVisitor{
 
-    public static final String EXAMPLE_EXPR = "-2+3-4";
+    public static final String EXAMPLE_EXPR = "2+3-4";
+    private Exception lastExc;
     
     
     public CalcWorker(ExprAble exprAble) {
         super(exprAble);
     }    
-    
-    public boolean calcProc(boolean showGrapg, ExprLexer lexer) {
+
+    public void calcProperChar(String s, CharActionInfo charActionInfo) {
+        charActionInfo.clear();        
+        if (s.equals("\n")) {
+            charActionInfo.setStart(true);
+            return;
+        }
+
+        if (s.equals("(")) {
+            charActionInfo.setLeft(true);
+            return;
+        }
+
+        if (s.equals(")")) {
+            charActionInfo.setRight(true);
+            return;
+        }
+
+        if (s.equals("+") || s.equals("-") || s.equals("*") || s.equals("/")) {
+            return;
+        }
+
+        String newS = Utils.onlyNumbers(s);
+        if (!s.equals(newS)) {
+            charActionInfo.setIncorrect(true);
+        }
+    }
+
+
+
+    public void calcProc(boolean showGrapg, ExprLexer lexer) throws RecognitionException {
+        resetOutCome();
         CommonTokenStream tokens = new CommonTokenStream(lexer);
         ExprParser parser = new ExprParser(tokens);
         parser.setBuildParseTree(true);
-        try {
-            ExprParser.CalcexptContext tree = parser.calcexpt();
-            if (showGrapg) {
-                tree.inspect(parser);
-            }
-            Values v = visit(tree);
-            System.out.println("Empty");
-            return true;
-        } catch (RecognitionException e) {
-            System.out.println(e.getMessage());
-            return false;
+
+        ExprParser.CalcexptContext tree = parser.calcexpt();
+        if (showGrapg) {
+            tree.inspect(parser);
         }
+        visit(tree);
     }
-    
+
+    public Double calcString(String s) {
+        ExprLexer lexer = new ExprLexer(new ANTLRInputStream(s));
+        try {
+            calcProc(true, lexer);
+        } catch (Exception e) {
+            lastExc = e;
+        }
+        return getOutcome();
+    }
     
     public static void main(String[] args) {
         try {
